@@ -116,6 +116,7 @@ class ORMPurger implements PurgerInterface
 
         $platform = $this->em->getConnection()->getDatabasePlatform();
         foreach($orderedTables as $tbl) {
+            $tbl = '`' . $tbl . '`';
             if ($this->purgeMode === self::PURGE_MODE_DELETE) {
                 $this->em->getConnection()->executeUpdate("DELETE FROM " . $tbl);
             } else {
