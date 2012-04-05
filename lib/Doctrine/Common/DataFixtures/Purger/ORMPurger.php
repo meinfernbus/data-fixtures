@@ -115,6 +115,13 @@ class ORMPurger implements PurgerInterface
         }
 
         $platform = $this->em->getConnection()->getDatabasePlatform();
+
+        // https://github.com/doctrine/data-fixtures/issues/17
+        // https://github.com/doctrine/dbal/pull/57
+        if(get_class($platform) == 'Doctrine\\DBAL\\Platforms\\MySqlPlatform') {
+            $this->em->getConnection()->executeQuery("SET foreign_key_checks = 0;");
+        }
+        
         foreach($orderedTables as $tbl) {
             $tbl = '`' . $tbl . '`';
             if ($this->purgeMode === self::PURGE_MODE_DELETE) {
@@ -123,6 +130,10 @@ class ORMPurger implements PurgerInterface
                 $this->em->getConnection()->executeUpdate($platform->getTruncateTableSQL($tbl, true));
             }
         }
+        
+        if(get_class($platform) == 'Doctrine\\DBAL\\Platforms\\MySqlPlatform') {
+            $this->em->getConnection()->executeQuery("SET foreign_key_checks = 1;");
+        }        
     }
 
     private function getCommitOrder(EntityManager $em, array $classes)
