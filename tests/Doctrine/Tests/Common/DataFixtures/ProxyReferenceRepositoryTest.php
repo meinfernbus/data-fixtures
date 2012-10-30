@@ -19,17 +19,18 @@
 
 namespace Doctrine\Tests\Common\DataFixtures;
 
-use Doctrine\Common\DataFixtures\ReferenceRepository;
+use Doctrine\Common\DataFixtures\ProxyReferenceRepository;
 use Doctrine\Common\DataFixtures\Event\Listener\ORMReferenceListener;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\ORM\Proxy\Proxy;
 
 /**
- * Test ReferenceRepository.
+ * Test ProxyReferenceRepository.
  *
  * @author Gediminas Morkevicius <gediminas.morkevicius@gmail.com>
+ * @author Anthon Pang <anthonp@nationalfibre.net>
  */
-class ReferenceRepositoryTest extends BaseTest
+class ProxyReferenceRepositoryTest extends BaseTest
 {
     const TEST_ENTITY_ROLE = 'Doctrine\Tests\Common\DataFixtures\TestEntity\Role';
 
@@ -41,7 +42,7 @@ class ReferenceRepositoryTest extends BaseTest
         $meta = $em->getClassMetadata(self::TEST_ENTITY_ROLE);
         $meta->getReflectionProperty('id')->setValue($role, 1);
 
-        $referenceRepo = new ReferenceRepository($em);
+        $referenceRepo = new ProxyReferenceRepository($em);
         $referenceRepo->addReference('test', $role);
 
         $references = $referenceRepo->getReferences();
@@ -54,7 +55,7 @@ class ReferenceRepositoryTest extends BaseTest
     public function testReferenceIdentityPopulation()
     {
         $em = $this->getMockSqliteEntityManager();
-        $referenceRepository = $this->getMockBuilder('Doctrine\Common\DataFixtures\ReferenceRepository')
+        $referenceRepository = $this->getMockBuilder('Doctrine\Common\DataFixtures\ProxyReferenceRepository')
             ->setConstructorArgs(array($em))
             ->getMock();
         $em->getEventManager()->addEventSubscriber(
@@ -80,17 +81,16 @@ class ReferenceRepositoryTest extends BaseTest
 
         $roleFixture = new TestFixtures\RoleFixture;
         $roleFixture->setReferenceRepository($referenceRepository);
-
         $roleFixture->load($em);
     }
 
     public function testReferenceReconstruction()
     {
         $em = $this->getMockSqliteEntityManager();
-        $referenceRepository = new ReferenceRepository($em);
-        $em->getEventManager()->addEventSubscriber(
-            new ORMReferenceListener($referenceRepository)
-        );
+        $referenceRepository = new ProxyReferenceRepository($em);
+        $listener = new ORMReferenceListener($referenceRepository);
+        $em->getEventManager()->addEventSubscriber($listener);
+
         $schemaTool = new SchemaTool($em);
         $schemaTool->dropSchema(array());
         $schemaTool->createSchema(array(
@@ -105,9 +105,29 @@ class ReferenceRepositoryTest extends BaseTest
 
         $this->assertNotInstanceOf('Doctrine\ORM\Proxy\Proxy', $ref);
 
+        // test reference reconstruction from serialized data (was managed)
+        $serializedData = $referenceRepository->serialize();
+
+        $proxyReferenceRepository = new ProxyReferenceRepository($em);
+        $proxyReferenceRepository->unserialize($serializedData);
+
+        $ref = $proxyReferenceRepository->getReference('admin-role');
+
+        $this->assertInstanceOf('Doctrine\ORM\Proxy\Proxy', $ref);
+
         // now test reference reconstruction from identity
         $em->clear();
         $ref = $referenceRepository->getReference('admin-role');
+
+        $this->assertInstanceOf('Doctrine\ORM\Proxy\Proxy', $ref);
+
+        // test reference reconstruction from serialized data (was identity)
+        $serializedData = $referenceRepository->serialize();
+
+        $proxyReferenceRepository = new ProxyReferenceRepository($em);
+        $proxyReferenceRepository->unserialize($serializedData);
+
+        $ref = $proxyReferenceRepository->getReference('admin-role');
 
         $this->assertInstanceOf('Doctrine\ORM\Proxy\Proxy', $ref);
     }

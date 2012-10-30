@@ -13,7 +13,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * This software consists of voluntary contributions made by many individuals
- * and is licensed under the LGPL. For more information, see
+ * and is licensed under the MIT license. For more information, see
  * <http://www.doctrine-project.org>.
  */
 
@@ -85,6 +85,16 @@ class ORMPurger implements PurgerInterface
       $this->em = $em;
     }
 
+    /**
+     * Retrieve the EntityManager instance this purger instance is using.
+     *
+     * @return \Doctrine\ORM\EntityManager
+     */
+    public function getObjectManager()
+    {
+        return $this->em;
+    }
+
     /** @inheritDoc */
     public function purge()
     {
@@ -102,6 +112,9 @@ class ORMPurger implements PurgerInterface
         // Drop association tables first
         $orderedTables = $this->getAssociationTables($commitOrder);
 
+        // Get platform parameters
+        $platform = $this->em->getConnection()->getDatabasePlatform();
+
         // Drop tables in reverse commit order
         for ($i = count($commitOrder) - 1; $i >= 0; --$i) {
             $class = $commitOrder[$i];
@@ -111,18 +124,18 @@ class ORMPurger implements PurgerInterface
                 continue;
             }
 
-            $orderedTables[] = $class->getTableName();
+            $orderedTables[] = $class->getQuotedTableName($platform);
         }
 
         $platform = $this->em->getConnection()->getDatabasePlatform();
 
         // https://github.com/doctrine/data-fixtures/issues/17
         // https://github.com/doctrine/dbal/pull/57
-        if(get_class($platform) == 'Doctrine\\DBAL\\Platforms\\MySqlPlatform') {
+        if (get_class($platform) == 'Doctrine\\DBAL\\Platforms\\MySqlPlatform') {
             $this->em->getConnection()->executeQuery("SET foreign_key_checks = 0;");
         }
-        
-        foreach($orderedTables as $tbl) {
+
+        foreach ($orderedTables as $tbl) {
             $tbl = '`' . $tbl . '`';
             if ($this->purgeMode === self::PURGE_MODE_DELETE) {
                 $this->em->getConnection()->executeUpdate("DELETE FROM " . $tbl);
@@ -130,10 +143,10 @@ class ORMPurger implements PurgerInterface
                 $this->em->getConnection()->executeUpdate($platform->getTruncateTableSQL($tbl, true));
             }
         }
-        
-        if(get_class($platform) == 'Doctrine\\DBAL\\Platforms\\MySqlPlatform') {
+
+        if (get_class($platform) == 'Doctrine\\DBAL\\Platforms\\MySqlPlatform') {
             $this->em->getConnection()->executeQuery("SET foreign_key_checks = 1;");
-        }        
+        }
     }
 
     private function getCommitOrder(EntityManager $em, array $classes)
@@ -142,6 +155,17 @@ class ORMPurger implements PurgerInterface
 
         foreach ($classes as $class) {
             $calc->addClass($class);
+
+            // $class before its parents
+            foreach ($class->parentClasses as $parentClass) {
+                $parentClass = $em->getClassMetadata($parentClass);
+
+                if ( ! $calc->hasClass($parentClass->name)) {
+                    $calc->addClass($parentClass);
+                }
+
+                $calc->addDependency($class, $parentClass);
+            }
 
             foreach ($class->associationMappings as $assoc) {
                 if ($assoc['isOwningSide']) {
@@ -153,6 +177,17 @@ class ORMPurger implements PurgerInterface
 
                     // add dependency ($targetClass before $class)
                     $calc->addDependency($targetClass, $class);
+
+                    // parents of $targetClass before $class, too
+                    foreach ($targetClass->parentClasses as $parentClass) {
+                        $parentClass = $em->getClassMetadata($parentClass);
+
+                        if ( ! $calc->hasClass($parentClass->name)) {
+                            $calc->addClass($parentClass);
+                        }
+
+                        $calc->addDependency($parentClass, $class);
+                    }
                 }
             }
         }

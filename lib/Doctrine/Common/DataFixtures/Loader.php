@@ -13,7 +13,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * This software consists of voluntary contributions made by many individuals
- * and is licensed under the LGPL. For more information, see
+ * and is licensed under the MIT license. For more information, see
  * <http://www.doctrine-project.org>.
  */
 
@@ -108,9 +108,21 @@ class Loader
     }
 
     /**
+     * Has fixture?
+     *
+     * @param FixtureInterface $fixture
+     *
+     * @return boolean
+     */
+    public function hasFixture($fixture)
+    {
+        return isset($this->fixtures[get_class($fixture)]);
+    }
+
+    /**
      * Add a fixture object instance to the loader.
      *
-     * @param object $fixture
+     * @param FixtureInterface $fixture
      */
     public function addFixture(FixtureInterface $fixture)
     {
