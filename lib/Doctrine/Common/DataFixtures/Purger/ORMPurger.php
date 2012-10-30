@@ -115,6 +115,12 @@ class ORMPurger implements PurgerInterface
         // Get platform parameters
         $platform = $this->em->getConnection()->getDatabasePlatform();
 
+        // https://github.com/doctrine/data-fixtures/issues/17
+        // https://github.com/doctrine/dbal/pull/57
+        if (get_class($platform) == 'Doctrine\\DBAL\\Platforms\\MySqlPlatform') {
+            $this->em->getConnection()->executeQuery("SET foreign_key_checks = 0;");
+        }
+
         // Drop tables in reverse commit order
         for ($i = count($commitOrder) - 1; $i >= 0; --$i) {
             $class = $commitOrder[$i];
@@ -125,14 +131,6 @@ class ORMPurger implements PurgerInterface
             }
 
             $orderedTables[] = $class->getQuotedTableName($platform);
-        }
-
-        $platform = $this->em->getConnection()->getDatabasePlatform();
-
-        // https://github.com/doctrine/data-fixtures/issues/17
-        // https://github.com/doctrine/dbal/pull/57
-        if (get_class($platform) == 'Doctrine\\DBAL\\Platforms\\MySqlPlatform') {
-            $this->em->getConnection()->executeQuery("SET foreign_key_checks = 0;");
         }
 
         foreach ($orderedTables as $tbl) {
