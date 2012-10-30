@@ -134,7 +134,7 @@ class ORMPurger implements PurgerInterface
         }
 
         foreach ($orderedTables as $tbl) {
-            $tbl = '`' . $tbl . '`';
+//            $tbl = '`' . $tbl . '`';
             if ($this->purgeMode === self::PURGE_MODE_DELETE) {
                 $this->em->getConnection()->executeUpdate("DELETE FROM " . $tbl);
             } else {
